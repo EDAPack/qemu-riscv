@@ -6,18 +6,34 @@ root=$(pwd)
 #* Install required packages
 #********************************************************************
 if test $(uname -s) = "Linux"; then
-    yum update -y
-    yum install -y wget git gcc gcc-c++ make \
-        python3 python3-pip \
-        glib2-devel pixman-devel zlib-devel patchelf
+    # Detect package manager
+    if command -v apt-get >/dev/null 2>&1; then
+        # Ubuntu/Debian
+        DEBIAN_FRONTEND=noninteractive apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            wget git gcc g++ make \
+            python3 python3-pip python3-venv \
+            libglib2.0-dev libpixman-1-dev zlib1g-dev \
+            ninja-build pkg-config patchelf
+    elif command -v yum >/dev/null 2>&1; then
+        # CentOS/RHEL
+        yum update -y
+        yum install -y wget git gcc gcc-c++ make \
+            python3 python3-pip \
+            glib2-devel pixman-devel zlib-devel patchelf
+        
+        # Install meson and ninja via pip (more reliable than yum packages)
+        pip3 install meson ninja
+    fi
 
     if test -z $image; then
         image=linux
     fi
-    export PATH=/opt/python/cp312-cp312/bin:$PATH
     
-    # Install meson and ninja via pip (more reliable than yum packages)
-    pip3 install meson ninja
+    # Try to set up Python path for manylinux if available
+    if test -d /opt/python/cp312-cp312/bin; then
+        export PATH=/opt/python/cp312-cp312/bin:$PATH
+    fi
     
     rls_plat=${image}
     USE_PATCHELF=1

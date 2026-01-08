@@ -46,8 +46,13 @@ jobs:
         needs: version-check
         strategy:
           matrix:
-            # Skip manylinux2014 - glib is too old (2.56, need 2.66+)
-            image: [manylinux_2_28_x86_64, manylinux_2_34_x86_64]
+            # Use Ubuntu containers - manylinux glib is too old
+            image: [ubuntu:22.04, ubuntu:24.04]
+            include:
+              - image: ubuntu:22.04
+                platform_name: ubuntu-22.04-x86_64
+              - image: ubuntu:24.04
+                platform_name: ubuntu-24.04-x86_64
         steps:
             - uses: actions/checkout@v4
             - name: print
@@ -59,7 +64,7 @@ jobs:
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                 BUILD_NUM: ${{ github.run_id }}
-                image: ${{ matrix.image }}
+                image: ${{ matrix.platform_name }}
                 qemu_latest_rls: ${{ needs.version-check.outputs.qemu_latest_rls }}
               run: >
                 docker run --rm
@@ -68,13 +73,13 @@ jobs:
                 --env qemu_latest_rls
                 --env image
                 --workdir /io
-                quay.io/pypa/${{ matrix.image }}
-                /io/scripts/build.sh
+                ${{ matrix.image }}
+                /bin/bash -c "apt-get update && apt-get install -y python3 python3-pip && /io/scripts/build.sh"
             - name: upload artifact
               uses: actions/upload-artifact@v4
               with:
-                name: "qemu-riscv-${{ matrix.image }}"
-                path: "release/qemu-riscv-${{ matrix.image }}-*.tar.gz"
+                name: "qemu-riscv-${{ matrix.platform_name }}"
+                path: "release/qemu-riscv-${{ matrix.platform_name }}-*.tar.gz"
                 if-no-files-found: error
                 retention-days: 7
 
