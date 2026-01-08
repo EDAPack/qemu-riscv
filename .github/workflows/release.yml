@@ -1,0 +1,189 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      qemu_tag:
+        description: 'QEMU tag to build (e.g., v9.2.0)'
+        required: true
+        type: string
+
+jobs:
+    version-check:
+        runs-on: 'ubuntu-latest'
+        outputs:
+            qemu_tag: ${{ steps.check.outputs.qemu_tag }}
+            rls_version: ${{ steps.check.outputs.rls_version }}
+        steps:
+        - name: fetch-version
+          id: check
+          run: |
+            qemu_tag="${{ inputs.qemu_tag }}"
+            
+            # Validate the tag exists in the QEMU repo
+            tag_check=$(curl -s -L \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                -o /dev/null -w "%{http_code}" \
+                "https://api.github.com/repos/qemu/qemu/git/refs/tags/${qemu_tag}")
+            
+            if [ "$tag_check" != "200" ]; then
+                echo "Error: Tag '${qemu_tag}' not found in qemu/qemu repository"
+                exit 1
+            fi
+            
+            # Extract version number from tag (remove leading 'v' if present)
+            rls_version=$(echo "${qemu_tag}" | sed -e 's/^v//')
+
+            echo "qemu_tag: ${qemu_tag}"
+            echo "rls_version: ${rls_version}"
+
+            echo "qemu_tag=${qemu_tag}" >> ${GITHUB_OUTPUT}
+            echo "rls_version=${rls_version}" >> ${GITHUB_OUTPUT}
+
+            cat ${GITHUB_OUTPUT}
+        - name: print
+          run: |
+            echo "qemu_tag: ${{ steps.check.outputs.qemu_tag }}"
+            echo "rls_version: ${{ steps.check.outputs.rls_version }}"
+
+
+    build-linux-x86_64:
+        runs-on: 'ubuntu-latest'
+        needs: version-check
+        strategy:
+          matrix:
+            image: [manylinux2014_x86_64, manylinux_2_28_x86_64, manylinux_2_34_x86_64]
+        steps:
+            - uses: actions/checkout@v4
+            - name: print
+              run: |
+                echo "print"
+                echo "image: ${{ matrix.image }}"
+                echo "qemu_tag: ${{ needs.version-check.outputs.qemu_tag }}"
+                echo "rls_version: ${{ needs.version-check.outputs.rls_version }}"
+            - name: build
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                image: ${{ matrix.image }}
+                qemu_latest_rls: ${{ needs.version-check.outputs.qemu_tag }}
+                rls_version: ${{ needs.version-check.outputs.rls_version }}
+              run: >
+                docker run --rm
+                --volume "$(pwd):/io"
+                --env qemu_latest_rls
+                --env rls_version
+                --env image
+                --workdir /io
+                quay.io/pypa/${{ matrix.image }}
+                /io/scripts/build.sh
+            - name: upload artifact
+              uses: actions/upload-artifact@v4
+              with:
+                name: "qemu-riscv-${{ matrix.image }}"
+                path: "release/qemu-riscv-${{ matrix.image }}-*.tar.gz"
+                if-no-files-found: error
+                retention-days: 7
+
+    build-linux-arm64:
+        runs-on: 'ubuntu-24.04-arm'
+        needs: version-check
+        strategy:
+          matrix:
+            image: [manylinux_2_28_aarch64, manylinux_2_34_aarch64]
+        steps:
+            - uses: actions/checkout@v4
+            - name: print
+              run: |
+                echo "print"
+                echo "image: ${{ matrix.image }}"
+                echo "qemu_tag: ${{ needs.version-check.outputs.qemu_tag }}"
+                echo "rls_version: ${{ needs.version-check.outputs.rls_version }}"
+            - name: build
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                image: ${{ matrix.image }}
+                qemu_latest_rls: ${{ needs.version-check.outputs.qemu_tag }}
+                rls_version: ${{ needs.version-check.outputs.rls_version }}
+              run: >
+                docker run --rm
+                --volume "$(pwd):/io"
+                --env qemu_latest_rls
+                --env rls_version
+                --env image
+                --workdir /io
+                quay.io/pypa/${{ matrix.image }}
+                /io/scripts/build.sh
+            - name: upload artifact
+              uses: actions/upload-artifact@v4
+              with:
+                name: "qemu-riscv-${{ matrix.image }}"
+                path: "release/qemu-riscv-${{ matrix.image }}-*.tar.gz"
+                if-no-files-found: error
+                retention-days: 7
+
+    build-macos-arm64:
+        runs-on: 'macos-14'
+        needs: version-check
+        steps:
+            - uses: actions/checkout@v4
+            - name: Install dependencies
+              run: |
+                brew install ninja pixman glib pkg-config
+            - name: print
+              run: |
+                echo "qemu_tag: ${{ needs.version-check.outputs.qemu_tag }}"
+                echo "rls_version: ${{ needs.version-check.outputs.rls_version }}"
+            - name: build
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                image: macos-arm64
+                qemu_latest_rls: ${{ needs.version-check.outputs.qemu_tag }}
+                rls_version: ${{ needs.version-check.outputs.rls_version }}
+              run: |
+                ./scripts/build.sh
+            - name: upload artifact
+              uses: actions/upload-artifact@v4
+              with:
+                name: "qemu-riscv-macos-arm64"
+                path: "release/qemu-riscv-macos-arm64-*.tar.gz"
+                if-no-files-found: error
+                retention-days: 7
+
+    publish:
+        runs-on: 'ubuntu-latest'
+        needs: 
+        - build-linux-x86_64
+        - build-linux-arm64
+        - build-macos-arm64
+        - version-check
+        permissions:
+            contents: write
+        steps:
+        - name: Create Release
+          id: create_release
+          uses: actions/create-release@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            tag_name: "v${{ needs.version-check.outputs.rls_version }}"
+            release_name: "Release v${{ needs.version-check.outputs.rls_version }}"
+            body: |
+              Build of QEMU RISC-V ${{ needs.version-check.outputs.qemu_tag }}
+              Version: ${{ needs.version-check.outputs.rls_version }}
+            draft: false
+            prerelease: false
+        - name: Download build artifacts
+          uses: actions/download-artifact@v4
+          with:
+            pattern: "qemu-riscv-*"
+            path: release
+            merge-multiple: true
+
+        - name: Upload assets to release
+          uses: softprops/action-gh-release@v2
+          with:
+            tag_name: "v${{ needs.version-check.outputs.rls_version }}"
+            files: |
+              release/**/*.tar.gz
+            fail_on_unmatched_files: true
