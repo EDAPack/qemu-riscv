@@ -8,17 +8,16 @@ root=$(pwd)
 if test $(uname -s) = "Linux"; then
     yum update -y
     yum install -y wget git gcc gcc-c++ make \
-        python3 python3-pip ninja-build \
-        glib2-devel pixman-devel zlib-devel \
-        libfdt-devel libslirp-devel patchelf
+        python3 python3-pip \
+        glib2-devel pixman-devel zlib-devel patchelf
 
     if test -z $image; then
         image=linux
     fi
     export PATH=/opt/python/cp312-cp312/bin:$PATH
     
-    # Install meson via pip
-    pip3 install meson
+    # Install meson and ninja via pip (more reliable than yum packages)
+    pip3 install meson ninja
     
     rls_plat=${image}
     USE_PATCHELF=1
@@ -75,7 +74,7 @@ fi
 cd qemu
 
 # Configure QEMU for RISC-V targets only
-# Build static binaries when possible for better portability
+# Disable features not available/needed for portability
 ./configure \
     --target-list=riscv32-softmmu,riscv64-softmmu,riscv32-linux-user,riscv64-linux-user \
     --prefix=${root}/release/qemu-riscv \
@@ -85,7 +84,7 @@ cd qemu
     --disable-sdl \
     --disable-gtk \
     --disable-opengl \
-    --enable-slirp
+    --disable-slirp
 
 if test $? -ne 0; then exit 1; fi
 

@@ -40,7 +40,7 @@ ExternalProject_Add(qemu
     --disable-sdl
     --disable-gtk
     --disable-opengl
-    --enable-slirp
+    --disable-slirp
   BUILD_COMMAND make -j${NPROC}
   INSTALL_COMMAND make install
   BUILD_IN_SOURCE 1
