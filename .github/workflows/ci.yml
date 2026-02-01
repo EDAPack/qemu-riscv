@@ -74,7 +74,7 @@ jobs:
                 --env image
                 --workdir /io
                 ${{ matrix.image }}
-                /bin/bash -c "apt-get update && apt-get install -y python3 python3-pip python3-tomli git && pip3 install ivpm && /io/scripts/build.sh"
+                /bin/bash -c "apt-get update && apt-get install -y python3 python3-pip python3-tomli git python3-venv && (pip3 install ivpm --break-system-packages 2>/dev/null || pip3 install ivpm) && /io/scripts/build.sh"
             - name: upload artifact
               uses: actions/upload-artifact@v4
               with:
