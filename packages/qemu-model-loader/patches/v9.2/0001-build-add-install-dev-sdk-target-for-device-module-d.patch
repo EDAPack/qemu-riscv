@@ -1,6 +1,6 @@
-From 81b9970a9beccad35763cbb7a74ba793cc362ecd Mon Sep 17 00:00:00 2001
+From 5b571ca7c77c4ff1260d7c0347bbd885c3589cd0 Mon Sep 17 00:00:00 2001
 From: Matthew Ballance <matt.ballance@gmail.com>
-Date: Sun, 1 Feb 2026 21:55:58 +0000
+Date: Sun, 1 Feb 2026 22:24:24 +0000
 Subject: [PATCH] build: add device SDK installation
 
 Install device development SDK headers and pkg-config file to enable
@@ -8,20 +8,20 @@ building QEMU device modules as external shared libraries.
 
 The SDK includes:
 - Public API headers from include/{qemu,qom,hw,exec,sysemu,chardev,io,migration,monitor}
-- Generated configuration files (config-host.h)
+- Generated configuration files (config-host.h, config-poison.h)
 - Generated QAPI headers
 - pkg-config file for easy integration
 
 Headers are installed to ${prefix}/include/qemu-device/
 ---
- meson.build | 62 +++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 62 insertions(+)
+ meson.build | 64 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 64 insertions(+)
 
 diff --git a/meson.build b/meson.build
-index 147097c..542b239 100644
+index 147097c..f047f50 100644
 --- a/meson.build
 +++ b/meson.build
-@@ -4320,6 +4320,68 @@ if get_option('plugins')
+@@ -4320,6 +4320,70 @@ if get_option('plugins')
      # so that plugin authors can compile against it.
      install_data(win32_qemu_plugin_api_lib, install_dir: 'lib')
    endif
@@ -69,6 +69,8 @@ index 147097c..542b239 100644
 +               strip_directory: false)
 +
 +# Install generated configuration files
++install_data(meson.current_build_dir() / 'config-poison.h',
++             install_dir: get_option('includedir') / 'qemu-device')
 +install_data(meson.current_build_dir() / 'config-host.h',
 +             install_dir: get_option('includedir') / 'qemu-device')
 +
