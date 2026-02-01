@@ -18,14 +18,13 @@ if [ ! -f "hw-custom-timer.so" ]; then
     echo "❌ Module not built yet"
     echo ""
     echo "The module requires QEMU SDK headers to build."
-    echo "Current status: SDK patches did not apply to QEMU master branch."
     echo ""
-    echo "To build the module, you need:"
-    echo "  1. QEMU with SDK support (patches applied)"
-    echo "  2. Device SDK headers installed"
-    echo "  3. pkg-config file for build configuration"
+    echo "To build the module:"
+    echo "  1. Download the QEMU release with SDK"
+    echo "  2. Extract it to the example directory"
+    echo "  3. Run 'make' to build the module"
     echo ""
-    echo "See README.md for solutions."
+    echo "See README.md for detailed instructions."
     exit 1
 fi
 
