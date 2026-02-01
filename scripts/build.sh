@@ -94,6 +94,7 @@ cd build
 if test "${qemu_latest_rls}" = "master"; then
     git clone --depth 1 --branch master https://gitlab.com/qemu-project/qemu.git
 else
+    # Clone specific version tag
     git clone --depth 1 --branch ${qemu_latest_rls} https://gitlab.com/qemu-project/qemu.git
 fi
 
@@ -129,20 +130,37 @@ fi
 
 if test $? -ne 0; then exit 1; fi
 
+# Enable SDK installation if patches are available
+if test -d "${root}/packages/qemu-model-loader/patches/v9.2"; then
+    echo "=== Enabling device SDK installation ==="
+    cd build
+    meson configure -Dinstall_dev_sdk=true
+    cd ..
+fi
+
 # Build
 make -j$(nproc)
 if test $? -ne 0; then exit 1; fi
 
-# Install
+# Install (SDK will be included automatically if enabled)
 make install
 if test $? -ne 0; then exit 1; fi
 
-# Install device SDK if patches were applied
+# Verify SDK installation
 if test -d "${root}/packages/qemu-model-loader/patches/v9.2"; then
-    echo "=== Installing device SDK ==="
-    make install-dev-sdk || {
-        echo "Note: install-dev-sdk target not available (patches may not have applied)"
-    }
+    echo "=== Verifying SDK installation ==="
+    if test -d "${root}/release/qemu-riscv/include/qemu-device"; then
+        echo "✓ SDK headers installed to include/qemu-device/"
+        ls -la "${root}/release/qemu-riscv/include/qemu-device/" | head -20
+    else
+        echo "WARNING: SDK headers not found, patches may not have been applied correctly"
+    fi
+    if test -f "${root}/release/qemu-riscv/lib/pkgconfig/qemu-device.pc"; then
+        echo "✓ pkg-config file installed"
+        cat "${root}/release/qemu-riscv/lib/pkgconfig/qemu-device.pc"
+    else
+        echo "WARNING: pkg-config file not found"
+    fi
 fi
 
 #********************************************************************
