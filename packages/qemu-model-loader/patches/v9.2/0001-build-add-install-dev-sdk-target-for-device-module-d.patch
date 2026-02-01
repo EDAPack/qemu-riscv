@@ -1,12 +1,10 @@
 From 136487aee5faa429a0caae758893850ad3b80cc9 Mon Sep 17 00:00:00 2001
 From: Matthew Ballance <matt.ballance@gmail.com>
 Date: Sun, 1 Feb 2026 20:24:29 +0000
-Subject: [PATCH] build: add install-dev-sdk target for device module
- development
+Subject: [PATCH] build: add device SDK installation
 
-Add a new build option 'install_dev_sdk' that installs headers and
-configuration files needed for building QEMU device modules as
-external shared libraries.
+Install device development SDK headers and pkg-config file to enable
+building QEMU device modules as external shared libraries.
 
 This enables binary distributions to provide a device development SDK
 without shipping the full source code.
@@ -17,16 +15,11 @@ The SDK includes:
 - Generated QAPI headers
 - pkg-config file for easy integration
 
-Usage:
-  meson configure -Dinstall_dev_sdk=true
-  ninja install
-
 Headers are installed to ${prefix}/include/qemu-device/ and can be
 accessed via 'pkg-config --cflags qemu-device'.
 ---
- meson.build       | 66 +++++++++++++++++++++++++++++++++++++++++++++++
- meson_options.txt |  3 +++
- 2 files changed, 69 insertions(+)
+ meson.build | 56 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 56 insertions(+)
 
 diff --git a/meson.build b/meson.build
 index 147097c..6879dc7 100644
@@ -100,14 +93,6 @@ index 147097c..6879dc7 100644
  subdir('qga')
  
  # Don't build qemu-keymap if xkbcommon is not explicitly enabled
-diff --git a/meson_options.txt b/meson_options.txt
-index 5eeaf3e..5eeaf3e 100644
---- a/meson_options.txt
-+++ b/meson_options.txt
-@@ -382,3 +382,3 @@ option('rust', type: 'feature', value: 'disabled',
-        description: 'Rust support')
- option('strict_rust_lints', type: 'boolean', value: false,
-        description: 'Enable stricter set of Rust warnings')
 -- 
 2.43.0
 
