@@ -130,13 +130,6 @@ fi
 
 if test $? -ne 0; then exit 1; fi
 
-# Enable SDK installation if patches are available
-if test -d "${root}/packages/qemu-model-loader/patches/v9.2"; then
-    echo "=== Enabling device SDK installation ==="
-    # Use meson from the build's Python venv
-    build/pyvenv/bin/meson configure build -Dinstall_dev_sdk=true
-fi
-
 # Build
 make -j$(nproc)
 if test $? -ne 0; then exit 1; fi

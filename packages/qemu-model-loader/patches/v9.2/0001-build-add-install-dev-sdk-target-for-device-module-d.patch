@@ -114,7 +114,7 @@ index 5eeaf3e..1f45f9a 100644
  option('strict_rust_lints', type: 'boolean', value: false,
         description: 'Enable stricter set of Rust warnings')
 +
-+option('install_dev_sdk', type: 'boolean', value: false,
++option('install_dev_sdk', type: 'boolean', value: true,
 +       description: 'Install device development SDK (headers and configs)')
 -- 
 2.43.0
