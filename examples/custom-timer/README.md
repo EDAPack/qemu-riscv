@@ -4,44 +4,35 @@ This example demonstrates how to create a custom QEMU device that can be loaded 
 
 ## Current Status
 
-✅ **Working**: The QEMU Device SDK patches now successfully apply to QEMU v9.2.0. The SDK headers are included in the binary releases, allowing external device modules to be built without QEMU source code.
+⚠️ **Partially Working**: The QEMU Device SDK patches successfully apply to QEMU v9.2.0 and install most headers. However, a required generated file (`config-poison.h`) is not currently included in the SDK, preventing module compilation.
 
-## Quick Start
+### What's Working
+- ✅ SDK headers are installed in binary releases
+- ✅ pkg-config integration is available  
+- ✅ Most QEMU headers are accessible
 
-### 1. Download QEMU Release with SDK
+### Known Issue
+- ❌ Missing `config-poison.h` prevents compilation
+- This file is generated during QEMU build but not installed by the SDK patch
+- **Fix needed**: Update patch to install generated files from build directory
 
-Download the latest QEMU RISC-V release from the GitHub Actions artifacts or releases. Extract it to this directory:
+## Workaround (Until Fixed)
+
+Until the patch is updated, modules can be built with full QEMU source:
 
 ```bash
-cd examples/custom-timer
-# Download and extract qemu-riscv-*.tar.gz here
-tar xzf qemu-riscv-ubuntu-*.tar.gz
-# This creates qemu-riscv/ directory with SDK headers
-```
+# Clone and build QEMU with patches
+git clone --branch v9.2.0 https://gitlab.com/qemu-project/qemu.git
+cd qemu
+git apply /path/to/qemu-riscv-loader/packages/qemu-model-loader/patches/v9.2/*.patch
+./configure --target-list=riscv32-softmmu,riscv64-softmmu
+make -j$(nproc)
+make install
 
-### 2. Build the Module
-
-```bash
+# Build module
+cd /path/to/examples/custom-timer
+export PKG_CONFIG_PATH=/usr/local/lib/x86_64-linux-gnu/pkgconfig
 make
-```
-
-This will:
-- Use pkg-config to find QEMU SDK headers
-- Compile custom-timer.c into hw-custom-timer.so
-- Create a loadable QEMU device module
-
-### 3. Test the Module
-
-```bash
-./test.sh
-```
-
-Or manually:
-
-```bash
-export QEMU_MODULE_DIR=$(pwd)
-./qemu-riscv/bin/qemu-system-riscv64 -device help | grep custom-timer
-./qemu-riscv/bin/qemu-system-riscv64 -M virt -device custom-timer -nographic
 ```
 
 ## The Custom Timer Device

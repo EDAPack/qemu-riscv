@@ -8,7 +8,7 @@ all: $(OUTPUT)
 
 $(OUTPUT): custom-timer.c
 	gcc -fPIC -DBUILD_DSO -shared -Wall -Wextra \
-		-I$(QEMU_DIR)/include \
+		-I$(QEMU_DIR)/include/qemu-device \
 		$$(pkg-config --cflags glib-2.0) \
 		-o $@ $< \
 		$$(pkg-config --libs glib-2.0)
