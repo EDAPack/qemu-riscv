@@ -1,0 +1,7 @@
+qemu-device-sdk (10.0.0-1) unstable; urgency=medium
+
+  * Initial release of QEMU Device SDK
+  * Provides headers for building external device modules
+  * Includes pkg-config integration
+
+ -- QEMU Project <qemu-devel@nongnu.org>  Sat, 01 Feb 2026 17:30:00 +0000

@@ -1,0 +1,477 @@
+# GitHub Actions Workflow Example for QEMU with Device SDK
+#
+# This workflow demonstrates how to:
+# 1. Build QEMU with device SDK patches
+# 2. Install the SDK
+# 3. Test with example devices
+# 4. Package and upload SDK artifacts
+#
+# Adapt this for your specific binary distribution (EDAPack, etc.)
+
+name: Build QEMU with Device SDK
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Weekly build to catch QEMU upstream changes
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      qemu_version:
+        description: 'QEMU version to build'
+        required: false
+        default: '9.2.0'
+
+env:
+  QEMU_VERSION: '9.2.0'
+  SDK_PATCHES_DIR: 'patches/device-sdk'
+
+jobs:
+  # Job 1: Apply and validate patches
+  validate-patches:
+    name: Validate SDK Patches
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Download QEMU source
+        run: |
+          wget -q https://download.qemu.org/qemu-${QEMU_VERSION}.tar.xz
+          tar xf qemu-${QEMU_VERSION}.tar.xz
+      
+      - name: Test patch application
+        run: |
+          cd qemu-${QEMU_VERSION}
+          
+          echo "Testing SDK patches..."
+          for patch in ../${SDK_PATCHES_DIR}/*.patch; do
+            echo "  Testing $(basename $patch)"
+            if patch -p1 --dry-run < "$patch"; then
+              echo "  ✓ Applies cleanly"
+            else
+              echo "  ✗ Conflicts detected"
+              exit 1
+            fi
+          done
+          
+          echo "All patches validated successfully"
+      
+      - name: Check patch ordering
+        run: |
+          # Verify patches are numbered correctly
+          cd ${SDK_PATCHES_DIR}
+          if ls -1 *.patch | grep -E '^[0-9]{4}-' > /dev/null; then
+            echo "✓ Patches properly numbered"
+          else
+            echo "✗ Patches not properly numbered"
+            exit 1
+          fi
+
+  # Job 2: Build QEMU with SDK (Linux)
+  build-linux:
+    name: Build QEMU+SDK (Linux)
+    needs: validate-patches
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            ninja-build \
+            python3-pip \
+            pkg-config \
+            libglib2.0-dev \
+            libpixman-1-dev \
+            flex \
+            bison
+          
+          pip3 install meson
+      
+      - name: Download QEMU source
+        run: |
+          wget -q https://download.qemu.org/qemu-${QEMU_VERSION}.tar.xz
+          tar xf qemu-${QEMU_VERSION}.tar.xz
+      
+      - name: Apply SDK patches
+        run: |
+          cd qemu-${QEMU_VERSION}
+          
+          echo "Applying SDK patches..."
+          for patch in ../${SDK_PATCHES_DIR}/*.patch; do
+            echo "  Applying $(basename $patch)"
+            patch -p1 < "$patch"
+          done
+      
+      - name: Configure QEMU
+        run: |
+          cd qemu-${QEMU_VERSION}
+          
+          ./configure \
+            --prefix=$PWD/install \
+            --target-list=riscv32-softmmu,riscv64-softmmu,x86_64-softmmu \
+            --enable-modules \
+            --disable-werror
+      
+      - name: Build QEMU
+        run: |
+          cd qemu-${QEMU_VERSION}
+          make -j$(nproc)
+      
+      - name: Install QEMU
+        run: |
+          cd qemu-${QEMU_VERSION}
+          make install
+      
+      - name: Install Device SDK
+        run: |
+          cd qemu-${QEMU_VERSION}
+          make install-dev-sdk
+      
+      - name: Verify SDK installation
+        run: |
+          cd qemu-${QEMU_VERSION}/install
+          
+          echo "Checking SDK structure..."
+          
+          # Check for headers
+          if [ -d include/qemu-device ]; then
+            echo "✓ SDK headers installed"
+            find include/qemu-device -name "*.h" | head -10
+          else
+            echo "✗ SDK headers missing"
+            exit 1
+          fi
+          
+          # Check for pkg-config file
+          if [ -f lib/pkgconfig/qemu-device.pc ]; then
+            echo "✓ pkg-config file installed"
+            cat lib/pkgconfig/qemu-device.pc
+          else
+            echo "✗ pkg-config file missing"
+            exit 1
+          fi
+          
+          # Test pkg-config
+          export PKG_CONFIG_PATH=$PWD/lib/pkgconfig
+          if pkg-config --exists qemu-device; then
+            echo "✓ pkg-config works"
+            pkg-config --cflags qemu-device
+          else
+            echo "✗ pkg-config not working"
+            exit 1
+          fi
+      
+      - name: Upload SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-device-sdk-linux-${{ env.QEMU_VERSION }}
+          path: qemu-${{ env.QEMU_VERSION }}/install/
+          retention-days: 30
+
+  # Job 3: Build and test example device
+  test-example-device:
+    name: Test Example Device
+    needs: build-linux
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config
+      
+      - name: Download SDK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: qemu-device-sdk-linux-${{ env.QEMU_VERSION }}
+          path: sdk-install
+      
+      - name: Build minimal example device
+        run: |
+          export PKG_CONFIG_PATH=$PWD/sdk-install/lib/pkgconfig
+          
+          # Create test device
+          cat > test-device.c << 'EOF'
+          #include "qemu/osdep.h"
+          #include "hw/sysbus.h"
+          #include "qom/object.h"
+          
+          #define TYPE_TEST_DEVICE "test-device"
+          OBJECT_DECLARE_SIMPLE_TYPE(TestDevice, TEST_DEVICE)
+          
+          struct TestDevice {
+              SysBusDevice parent_obj;
+          };
+          
+          static void test_device_class_init(ObjectClass *klass, void *data)
+          {
+              DeviceClass *dc = DEVICE_CLASS(klass);
+              dc->desc = "CI Test Device";
+          }
+          
+          static const TypeInfo test_device_info = {
+              .name = TYPE_TEST_DEVICE,
+              .parent = TYPE_SYS_BUS_DEVICE,
+              .instance_size = sizeof(TestDevice),
+              .class_init = test_device_class_init,
+          };
+          
+          static void test_device_register_types(void)
+          {
+              type_register_static(&test_device_info);
+          }
+          
+          type_init(test_device_register_types)
+          EOF
+          
+          # Build device
+          gcc -shared -fPIC \
+            $(pkg-config --cflags qemu-device) \
+            -o test-device.so \
+            test-device.c \
+            $(pkg-config --libs qemu-device)
+          
+          if [ -f test-device.so ]; then
+            echo "✓ Test device built successfully"
+            ls -lh test-device.so
+          else
+            echo "✗ Test device build failed"
+            exit 1
+          fi
+      
+      - name: Verify device symbols
+        run: |
+          if nm test-device.so | grep -q "test_device_register_types"; then
+            echo "✓ Device symbols present"
+          else
+            echo "✗ Device symbols missing"
+            exit 1
+          fi
+      
+      - name: Upload test device
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-device-module
+          path: test-device.so
+          retention-days: 7
+
+  # Job 4: Package SDK
+  package-sdk:
+    name: Package SDK for Distribution
+    needs: build-linux
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Download SDK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: qemu-device-sdk-linux-${{ env.QEMU_VERSION }}
+          path: sdk-install
+      
+      - name: Create SDK package
+        run: |
+          PACKAGE_NAME=qemu-device-sdk-${QEMU_VERSION}-linux-x86_64
+          
+          mkdir -p ${PACKAGE_NAME}
+          
+          # Copy SDK files
+          cp -r sdk-install/include ${PACKAGE_NAME}/
+          cp -r sdk-install/lib ${PACKAGE_NAME}/
+          
+          # Add documentation
+          mkdir -p ${PACKAGE_NAME}/share/doc
+          cp docs/SDK-STRUCTURE.md ${PACKAGE_NAME}/share/doc/
+          cp README.md ${PACKAGE_NAME}/share/doc/
+          
+          # Create tarball
+          tar czf ${PACKAGE_NAME}.tar.gz ${PACKAGE_NAME}
+          
+          echo "Package created:"
+          ls -lh ${PACKAGE_NAME}.tar.gz
+      
+      - name: Generate package metadata
+        run: |
+          cat > sdk-metadata.json << EOF
+          {
+            "name": "qemu-device-sdk",
+            "version": "${QEMU_VERSION}",
+            "platform": "linux-x86_64",
+            "qemu_version": "${QEMU_VERSION}",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "build_sha": "${{ github.sha }}",
+            "build_ref": "${{ github.ref }}"
+          }
+          EOF
+          
+          cat sdk-metadata.json
+      
+      - name: Upload SDK package
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-device-sdk-package
+          path: |
+            qemu-device-sdk-*.tar.gz
+            sdk-metadata.json
+          retention-days: 90
+      
+      - name: Create release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            qemu-device-sdk-*.tar.gz
+            sdk-metadata.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 5: Build for macOS (optional)
+  build-macos:
+    name: Build QEMU+SDK (macOS)
+    needs: validate-patches
+    runs-on: macos-latest
+    if: github.event_name != 'pull_request'  # Skip on PRs to save time
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        run: |
+          brew install \
+            ninja \
+            pkg-config \
+            glib \
+            pixman \
+            meson
+      
+      - name: Download QEMU source
+        run: |
+          wget -q https://download.qemu.org/qemu-${QEMU_VERSION}.tar.xz
+          tar xf qemu-${QEMU_VERSION}.tar.xz
+      
+      - name: Apply SDK patches
+        run: |
+          cd qemu-${QEMU_VERSION}
+          for patch in ../${SDK_PATCHES_DIR}/*.patch; do
+            echo "Applying $(basename $patch)"
+            patch -p1 < "$patch"
+          done
+      
+      - name: Configure and build
+        run: |
+          cd qemu-${QEMU_VERSION}
+          
+          ./configure \
+            --prefix=$PWD/install \
+            --target-list=riscv32-softmmu,riscv64-softmmu,x86_64-softmmu \
+            --enable-modules \
+            --disable-werror
+          
+          make -j$(sysctl -n hw.ncpu)
+          make install
+          make install-dev-sdk
+      
+      - name: Upload SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-device-sdk-macos-${{ env.QEMU_VERSION }}
+          path: qemu-${{ env.QEMU_VERSION }}/install/
+          retention-days: 30
+
+  # Job 6: Documentation check
+  check-documentation:
+    name: Check Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Verify integration docs
+        run: |
+          required_docs=(
+            "docs/integrations/EDAPACK.md"
+            "docs/integrations/github-actions-example.yml"
+            "docs/PACKAGER-GUIDE.md"
+            "docs/SDK-STRUCTURE.md"
+          )
+          
+          for doc in "${required_docs[@]}"; do
+            if [ -f "$doc" ]; then
+              echo "✓ $doc exists"
+            else
+              echo "✗ $doc missing"
+              exit 1
+            fi
+          done
+      
+      - name: Check for broken links
+        run: |
+          # Simple markdown link checker
+          find docs -name "*.md" -exec grep -o '\[.*\](.*)' {} \; | \
+            grep -o '(.*\.md)' | tr -d '()' | while read link; do
+              if [ ! -f "docs/$link" ]; then
+                echo "Warning: Broken link to $link"
+              fi
+            done
+
+  # Job 7: Integration test summary
+  integration-summary:
+    name: Integration Summary
+    needs: [validate-patches, build-linux, test-example-device, package-sdk]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## QEMU Device SDK Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**QEMU Version:** ${QEMU_VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Date:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Status" >> $GITHUB_STEP_SUMMARY
+          echo "- Patches: ${{ needs.validate-patches.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Linux Build: ${{ needs.build-linux.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Example Device: ${{ needs.test-example-device.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- SDK Package: ${{ needs.package-sdk.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- SDK: qemu-device-sdk-linux-${QEMU_VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "- Test Device: test-device-module" >> $GITHUB_STEP_SUMMARY
+          echo "- Package: qemu-device-sdk-package" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Check overall status
+        if: |
+          needs.validate-patches.result != 'success' ||
+          needs.build-linux.result != 'success' ||
+          needs.test-example-device.result != 'success' ||
+          needs.package-sdk.result != 'success'
+        run: |
+          echo "Some jobs failed. Please check the logs."
+          exit 1
+
+# Optional: Matrix build for multiple QEMU versions
+# Uncomment to test against multiple versions
+#
+# strategy:
+#   matrix:
+#     qemu_version: ['9.1.0', '9.2.0', '10.0.0']
+#   fail-fast: false

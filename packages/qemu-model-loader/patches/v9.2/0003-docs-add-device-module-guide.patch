@@ -1,0 +1,415 @@
+From: QEMU Model Loader Project <qemu-model-loader@example.com>
+Date: Sat, 1 Feb 2026 17:27:00 +0000
+Subject: [PATCH 3/3] docs: add device module development guide
+
+Add documentation for building QEMU device modules as external
+shared libraries using the device development SDK.
+
+This guide covers:
+- Overview of the device module system
+- SDK installation and usage
+- Building device modules
+- Loading modules in QEMU
+- API stability and compatibility
+- Example device implementation
+
+The documentation is targeted at developers who want to create
+custom device models for QEMU without modifying QEMU source code.
+
+Signed-off-by: QEMU Model Loader Project <qemu-model-loader@example.com>
+---
+ docs/devel/device-modules.rst | 350 ++++++++++++++++++++++++++++++++++
+ docs/devel/index.rst           |   1 +
+ 2 files changed, 351 insertions(+)
+ create mode 100644 docs/devel/device-modules.rst
+
+diff --git a/docs/devel/device-modules.rst b/docs/devel/device-modules.rst
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/docs/devel/device-modules.rst
+@@ -0,0 +1,350 @@
++.. _device-modules:
++
++========================================
++QEMU Device Modules (External Devices)
++========================================
++
++Overview
++========
++
++QEMU supports loading device models as dynamically loaded shared libraries.
++This allows developers to create custom device models without modifying or
++recompiling QEMU itself.
+
++
++Device modules use the same QOM (QEMU Object Model) and QDEV APIs as
++built-in devices, but are compiled separately and loaded at runtime.
++
++Use Cases
++=========
++
++Device modules are useful for:
++
++- **Custom hardware modeling**: Model proprietary or specialized hardware
++- **Rapid prototyping**: Quickly iterate on device designs
++- **Educational purposes**: Teaching hardware/software interfaces
++- **Proprietary IP**: Distribute device models without source code
++- **Legacy hardware**: Model discontinued or niche hardware
++
++Prerequisites
++=============
++
++To build device modules, you need:
++
++1. **QEMU Device SDK**: Headers and configuration files
++
++   - Install via package manager (e.g., ``qemu-device-sdk`` package)
++   - Or use ``make install-dev-sdk`` when building QEMU from source
++
++2. **Development tools**:
++
++   - C compiler (GCC or Clang)
++   - GLib development files (``glib-2.0-dev`` or ``glib2-devel``)
++   - pkg-config tool
++
++3. **QEMU with module support**: Ensure QEMU was built with ``--enable-modules``
++
++Quick Start
++===========
++
++Minimal Device Module
++---------------------
++
++Here's a minimal SysBus device module::
++
++    /* minimal-device.c */
++    #define BUILD_DSO
++    #include "qemu/osdep.h"
++    #include "qemu/module.h"
++    #include "hw/sysbus.h"
++    #include "qom/object.h"
++
++    #define TYPE_MINIMAL_DEVICE "minimal-device"
++    OBJECT_DECLARE_SIMPLE_TYPE(MinimalDeviceState, MINIMAL_DEVICE)
++
++    struct MinimalDeviceState {
++        SysBusDevice parent_obj;
++        MemoryRegion mmio;
++    };
++
++    static uint64_t minimal_device_read(void *opaque, hwaddr addr, unsigned size)
++    {
++        return 0;
++    }
++
++    static void minimal_device_write(void *opaque, hwaddr addr,
++                                    uint64_t val, unsigned size)
++    {
++    }
++
++    static const MemoryRegionOps minimal_device_ops = {
++        .read = minimal_device_read,
++        .write = minimal_device_write,
++        .endianness = DEVICE_NATIVE_ENDIAN,
++    };
++
++    static void minimal_device_init(Object *obj)
++    {
++        MinimalDeviceState *s = MINIMAL_DEVICE(obj);
++        SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
++        
++        memory_region_init_io(&s->mmio, obj, &minimal_device_ops, s,
++                            TYPE_MINIMAL_DEVICE, 0x1000);
++        sysbus_init_mmio(sbd, &s->mmio);
++    }
++
++    static void minimal_device_class_init(ObjectClass *oc, const void *data)
++    {
++        DeviceClass *dc = DEVICE_CLASS(oc);
++        dc->desc = "Minimal Example Device";
++    }
++
++    static const TypeInfo minimal_device_info = {
++        .name          = TYPE_MINIMAL_DEVICE,
++        .parent        = TYPE_SYS_BUS_DEVICE,
++        .instance_size = sizeof(MinimalDeviceState),
++        .instance_init = minimal_device_init,
++        .class_init    = minimal_device_class_init,
++    };
++
++    static void minimal_device_register_types(void)
++    {
++        type_register_static(&minimal_device_info);
++    }
++
++    type_init(minimal_device_register_types)
++    module_obj(TYPE_MINIMAL_DEVICE);
++
++Building the Module
++-------------------
++
++Using pkg-config::
++
++    gcc $(pkg-config --cflags qemu-device) \\
++        -fPIC -shared minimal-device.c \\
++        -o hw-minimal-device.so \\
++        $(pkg-config --libs glib-2.0)
++
++Or with explicit paths::
++
++    gcc -I/usr/include/qemu-device \\
++        -I/usr/include/qemu-device/config \\
++        -DBUILD_DSO \\
++        $(pkg-config --cflags glib-2.0) \\
++        -fPIC -shared minimal-device.c \\
++        -o hw-minimal-device.so \\
++        $(pkg-config --libs glib-2.0)
++
++Using the Module
++----------------
++
++1. Place the module where QEMU can find it::
++
++       export QEMU_MODULE_DIR=/path/to/modules
++       cp hw-minimal-device.so $QEMU_MODULE_DIR/
++
++2. Use the device in QEMU::
++
++       qemu-system-x86_64 -M pc -device minimal-device
++
++QEMU will automatically load ``hw-minimal-device.so`` when you specify
++``-device minimal-device``.
++
++Module Naming Convention
++========================
++
++Module filenames must follow this pattern::
++
++    hw-<typename>.so       # Linux/Unix
++    hw-<typename>.dll      # Windows  
++    hw-<typename>.dylib    # macOS
++
++For example, a device with ``TYPE_MY_UART`` → ``hw-my-uart.so``
++
++Required Module Symbols
++=======================
++
++Every device module must:
++
++1. Define ``BUILD_DSO`` before including headers
++2. Include ``qemu/module.h``
++3. Use ``type_init()`` macro to register device types
++4. Use ``module_obj()`` macro to declare exported types
++5. Implement ``qemu_module_dummy()`` (automatically added by headers)
++
++Device Types
++============
++
++SysBus Devices
++--------------
++
++For memory-mapped devices on the system bus::
++
++    #include "hw/sysbus.h"
++    
++    .parent = TYPE_SYS_BUS_DEVICE
++
++PCI Devices
++-----------
++
++For PCI devices::
++
++    #include "hw/pci/pci.h"
++    
++    .parent = TYPE_PCI_DEVICE
++    .interfaces = (const InterfaceInfo[]) {
++        { INTERFACE_CONVENTIONAL_PCI_DEVICE },
++        { },
++    }
++
++ISA Devices
++-----------
++
++For ISA bus devices::
++
++    #include "hw/isa/isa.h"
++    
++    .parent = TYPE_ISA_DEVICE
++
++USB Devices
++-----------
++
++For USB devices::
++
++    #include "hw/usb.h"
++    
++    .parent = TYPE_USB_DEVICE
++
++API Stability
++=============
++
++Stable APIs (Safe to use)
++--------------------------
++
++These APIs are considered stable within QEMU major versions:
++
++- QOM core: ``object_new()``, ``object_class_by_name()``, type registration
++- QDEV core: ``DeviceClass``, ``DeviceState``, ``realize``/``unrealize``
++- Memory regions: ``MemoryRegion``, ``MemoryRegionOps``
++- IRQ handling: ``qemu_irq``, ``qemu_set_irq()``
++- Properties: ``DEFINE_PROP_*`` macros
++- Module system: ``type_init()``, ``module_obj()``
++
++Unstable APIs (Use with caution)
++---------------------------------
++
++These APIs may change between QEMU versions:
++
++- Internal helper functions
++- Target-specific code
++- Device implementation details
++- Non-public headers
++
++Always rebuild device modules when updating QEMU.
++
++Debugging
++=========
++
++Enable Module Loading Traces
++-----------------------------
++
++::
++
++    qemu-system-x86_64 -trace 'module_*' -device mydevice
++
++Use GDB
++-------
++
++::
++
++    gdb --args qemu-system-x86_64 -device mydevice
++    (gdb) break my_device_realize
++    (gdb) run
++
++Check Module Symbols
++--------------------
++
++::
++
++    nm hw-mydevice.so | grep qemu_module
++    nm hw-mydevice.so | grep my_device
++
++Common Issues
++=============
++
++Module Not Found
++----------------
++
++**Problem**: ``Error: 'mydevice' is not a valid device``
++
++**Solutions**:
++
++- Check ``QEMU_MODULE_DIR`` is set correctly
++- Verify module filename matches: ``hw-<typename>.so``
++- Ensure module is in a directory QEMU searches
++
++Symbol Errors
++-------------
++
++**Problem**: ``undefined symbol`` errors when loading
++
++**Solutions**:
++
++- Ensure ``BUILD_DSO`` is defined
++- Link against GLib: ``$(pkg-config --libs glib-2.0)``
++- Check all required headers are included
++
++Version Mismatch
++----------------
++
++**Problem**: ``module version mismatch``
++
++**Solutions**:
++
++- Rebuild module against correct QEMU SDK version
++- Ensure SDK version matches installed QEMU version
++
++Advanced Topics
++===============
++
++Properties
++----------
++
++Add device properties::
++
++    static Property my_device_properties[] = {
++        DEFINE_PROP_UINT32("reg-size", MyDeviceState, reg_size, 0x1000),
++        DEFINE_PROP_STRING("name", MyDeviceState, name),
++        DEFINE_PROP_END_OF_LIST(),
++    };
++
++    static void my_device_class_init(ObjectClass *oc, const void *data)
++    {
++        DeviceClass *dc = DEVICE_CLASS(oc);
++        device_class_set_props(dc, my_device_properties);
++    }
++
++Character Device Backend
++------------------------
++
++Connect to character devices::
++
++    #include "chardev/char-fe.h"
++    
++    typedef struct {
++        DeviceState parent;
++        CharBackend chr;
++    } MyUartState;
++    
++    static Property my_uart_props[] = {
++        DEFINE_PROP_CHR("chardev", MyUartState, chr),
++        DEFINE_PROP_END_OF_LIST(),
++    };
++
++Examples
++========
++
++See the QEMU source tree for device examples:
++
++- ``hw/misc/edu.c`` - Educational PCI device
++- ``hw/misc/debugexit.c`` - Simple ISA device
++- ``hw/char/serial.c`` - Serial port device
++
++External examples:
++
++- https://github.com/fvutils/qemu-model-loader/tree/main/examples
++
++Further Reading
++===============
++
++- :ref:`qom` - QEMU Object Model
++- :ref:`qdev-api` - Device API Reference
++- ``docs/qdev-device-use.txt`` - Device usage guide
++
++Support
++=======
++
++- QEMU mailing list: qemu-devel@nongnu.org
++- QEMU IRC: #qemu on OFTC
++- Bug tracker: https://gitlab.com/qemu-project/qemu/-/issues
+diff --git a/docs/devel/index.rst b/docs/devel/index.rst
+index 7654321..abcdef0 100644
+--- a/docs/devel/index.rst
++++ b/docs/devel/index.rst
+@@ -43,6 +43,7 @@ Contents:
+    reset
+    s390-cpu-topology
+    ebpf_rss
++   device-modules
+ 
+ Testing
+ -------
+-- 
+2.40.0
+

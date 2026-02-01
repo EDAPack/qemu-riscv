@@ -1,0 +1,23 @@
+#!/usr/bin/make -f
+# debian/rules for qemu-device-sdk
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	# SDK is pre-built, no configuration needed
+	@echo "SDK packaging: skipping configure"
+
+override_dh_auto_build:
+	# SDK is pre-built, no build needed
+	@echo "SDK packaging: skipping build"
+
+override_dh_auto_install:
+	# Install SDK files from staging
+	mkdir -p debian/qemu-device-sdk/usr
+	cp -r $(CURDIR)/usr/* debian/qemu-device-sdk/usr/
+
+override_dh_auto_test:
+	# Run SDK verification
+	@echo "Verifying SDK..."
+	-bash $(CURDIR)/verify-sdk.sh debian/qemu-device-sdk/usr || true

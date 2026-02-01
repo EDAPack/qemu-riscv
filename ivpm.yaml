@@ -1,0 +1,9 @@
+
+package:
+  name: qemu-riscv
+
+  dep-sets:
+  - name: default-dev
+    deps: 
+    - name: qemu-model-loader
+      url: https://github.com/fvutils/qemu-model-loader.git

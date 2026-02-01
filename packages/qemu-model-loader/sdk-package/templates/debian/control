@@ -1,0 +1,33 @@
+Source: qemu-device-sdk
+Section: devel
+Priority: optional
+Maintainer: QEMU Project <qemu-devel@nongnu.org>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+Homepage: https://www.qemu.org
+Vcs-Git: https://gitlab.com/qemu-project/qemu.git
+Vcs-Browser: https://gitlab.com/qemu-project/qemu
+
+Package: qemu-device-sdk
+Architecture: any
+Depends: ${misc:Depends}, libglib2.0-dev (>= 2.56)
+Description: QEMU Device Module Development SDK
+ Headers and configuration files for building QEMU device modules
+ as external shared libraries.
+ .
+ This package enables developers to create custom device models for
+ QEMU without modifying or recompiling QEMU itself. Device modules
+ use the same QOM (QEMU Object Model) and QDEV APIs as built-in
+ devices, but are compiled separately and loaded at runtime.
+ .
+ The SDK includes:
+  * All public API headers from QEMU
+  * Generated configuration (config-host.h)
+  * Generated QAPI type definitions
+  * pkg-config integration
+ .
+ Use cases:
+  * Custom hardware modeling
+  * Rapid prototyping
+  * Educational purposes
+  * Proprietary IP distribution

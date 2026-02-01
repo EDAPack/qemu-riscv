@@ -1,0 +1,84 @@
+From: QEMU Model Loader Project <qemu-model-loader@example.com>
+Date: Sat, 1 Feb 2026 17:26:00 +0000
+Subject: [PATCH 2/3] build: generate pkg-config file for device module SDK
+
+Generate a pkg-config file (qemu-device.pc) that provides compiler
+and linker flags for building QEMU device modules.
+
+This simplifies the build process for external device developers:
+
+  Before:
+    gcc -I/usr/include/qemu-device \\
+        -I/usr/include/qemu-device/config \\
+        -DBUILD_DSO $(pkg-config --cflags glib-2.0) \\
+        -shared device.c -o hw-device.so
+
+  After:
+    gcc $(pkg-config --cflags qemu-device) \\
+        -shared device.c -o hw-device.so
+
+The pkg-config file is only generated and installed when
+install_dev_sdk option is enabled.
+
+Signed-off-by: QEMU Model Loader Project <qemu-model-loader@example.com>
+---
+ meson.build            | 20 ++++++++++++++++++++
+ qemu-device.pc.in      | 15 +++++++++++++++
+ 2 files changed, 35 insertions(+)
+ create mode 100644 qemu-device.pc.in
+
+diff --git a/meson.build b/meson.build
+index abcdef0..1234567 100644
+--- a/meson.build
++++ b/meson.build
+@@ -4513,6 +4513,26 @@ if get_option('install_dev_sdk')
+   
+   # Note: qemu-version.h is not generated in meson build yet
+   # It will be added when version info is migrated to meson
++  
++  # Generate and install pkg-config file
++  pkg = import('pkgconfig')
++  pkg.generate(
++    name: 'qemu-device',
++    description: 'QEMU Device Module Development SDK',
++    version: meson.project_version(),
++    requires: ['glib-2.0 >= 2.56'],
++    variables: [
++      'includedir=' + get_option('prefix') / get_option('includedir'),
++      'sdkincludedir=${includedir}/qemu-device',
++      'configdir=${sdkincludedir}/config',
++    ],
++    extra_cflags: [
++      '-I${sdkincludedir}',
++      '-I${configdir}',
++      '-DBUILD_DSO',
++    ],
++    filebase: 'qemu-device',
++  )
+ endif
+ 
+ #########
+diff --git a/qemu-device.pc.in b/qemu-device.pc.in
+new file mode 100644
+index 0000000..9876543
+--- /dev/null
++++ b/qemu-device.pc.in
+@@ -0,0 +1,15 @@
++# pkg-config file for QEMU device module development
++prefix=@prefix@
++exec_prefix=@exec_prefix@
++includedir=@includedir@
++sdkincludedir=${includedir}/qemu-device
++configdir=${sdkincludedir}/config
++
++Name: QEMU Device SDK
++Description: SDK for building QEMU device modules
++Version: @version@
++Requires: glib-2.0 >= 2.56
++Cflags: -I${sdkincludedir} -I${configdir} -DBUILD_DSO
++Libs:
++URL: https://www.qemu.org
++
+-- 
+2.40.0
+

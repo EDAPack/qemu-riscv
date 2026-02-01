@@ -3,6 +3,16 @@
 root=$(pwd)
 
 #********************************************************************
+#* Fetch dependencies with ivpm
+#********************************************************************
+echo "=== Fetching dependencies with ivpm ==="
+if command -v ivpm >/dev/null 2>&1; then
+    ivpm update -a
+else
+    echo "WARNING: ivpm not found, skipping package fetch"
+fi
+
+#********************************************************************
 #* Install required packages
 #********************************************************************
 if test $(uname -s) = "Linux"; then
@@ -89,6 +99,21 @@ fi
 
 cd qemu
 
+# Apply model-loader patches if available
+echo "=== Applying model-loader patches ==="
+if test -d "${root}/packages/qemu-model-loader/patches/v9.2"; then
+    for patch in "${root}/packages/qemu-model-loader/patches/v9.2"/*.patch; do
+        if test -f "$patch"; then
+            echo "Applying $(basename $patch)..."
+            patch -p1 < "$patch" || {
+                echo "WARNING: Failed to apply $(basename $patch), continuing..."
+            }
+        fi
+    done
+else
+    echo "WARNING: No patches found at ${root}/packages/qemu-model-loader/patches/v9.2"
+fi
+
 # Configure QEMU for RISC-V targets only
 # Disable features not available/needed for portability
 ./configure \
@@ -111,6 +136,14 @@ if test $? -ne 0; then exit 1; fi
 # Install
 make install
 if test $? -ne 0; then exit 1; fi
+
+# Install device SDK if patches were applied
+if test -d "${root}/packages/qemu-model-loader/patches/v9.2"; then
+    echo "=== Installing device SDK ==="
+    make install-dev-sdk || {
+        echo "Note: install-dev-sdk target not available (patches may not have applied)"
+    }
+fi
 
 #********************************************************************
 #* Check and fix portability issues
