@@ -16,11 +16,11 @@ jobs:
         - name: fetch-version
           id: check
           run: |
-            # Use latest stable QEMU v9.2.x release (compatible with model-loader patches)
-            qemu_version="9.2.4"
+            # Use QEMU v9.2.0 stable release (model-loader patches target this version)
+            qemu_version="9.2.0"
             
-            # Use v9.2.4 stable release
-            qemu_latest_rls="v9.2.4"
+            # Use v9.2.0 stable release
+            qemu_latest_rls="v9.2.0"
 
             echo "qemu_version: ${qemu_version}"
             echo "qemu_latest_rls: ${qemu_latest_rls}"
