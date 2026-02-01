@@ -95,9 +95,6 @@ index 147097c..6879dc7 100644
 +    name: 'qemu-device',
 +    description: 'QEMU Device Development SDK',
 +    version: meson.project_version(),
-+    variables: [
-+      'includedir=${prefix}/include',
-+    ],
 +    subdirs: ['qemu-device'],
 +  )
 +endif
