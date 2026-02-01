@@ -40,19 +40,18 @@ index 147097c..6879dc7 100644
 +# Device Module SDK       #
 +###########################
 +
-+if get_option('install_dev_sdk')
-+  # Install all public API headers needed for device development
-+  install_subdir('include/qemu',
-+                 install_dir: get_option('includedir') / 'qemu-device',
-+                 strip_directory: false,
-+                 exclude_files: ['osdep.h.inc'])
++# Install all public API headers needed for device development
++install_subdir('include/qemu',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false,
++               exclude_files: ['osdep.h.inc'])
 +
-+  install_subdir('include/qom',
-+                 install_dir: get_option('includedir') / 'qemu-device',
-+                 strip_directory: false)
++install_subdir('include/qom',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false)
 +
-+  install_subdir('include/hw',
-+                 install_dir: get_option('includedir') / 'qemu-device',
++install_subdir('include/hw',
++               install_dir: get_option('includedir') / 'qemu-device',
 +                 strip_directory: false)
 +
 +  install_subdir('include/exec',
@@ -89,30 +88,26 @@ index 147097c..6879dc7 100644
 +                 strip_directory: false,
 +                 exclude_directories: ['trace'])
 +
-+  # Generate and install pkg-config file
-+  pkg = import('pkgconfig')
-+  pkg.generate(
-+    name: 'qemu-device',
-+    description: 'QEMU Device Development SDK',
-+    version: meson.project_version(),
-+    subdirs: ['qemu-device'],
-+  )
-+endif
++# Generate and install pkg-config file
++pkg = import('pkgconfig')
++pkg.generate(
++  name: 'qemu-device',
++  description: 'QEMU Device Development SDK',
++  version: meson.project_version(),
++  subdirs: ['qemu-device'],
++)
 +
  subdir('qga')
  
  # Don't build qemu-keymap if xkbcommon is not explicitly enabled
 diff --git a/meson_options.txt b/meson_options.txt
-index 5eeaf3e..1f45f9a 100644
+index 5eeaf3e..5eeaf3e 100644
 --- a/meson_options.txt
 +++ b/meson_options.txt
-@@ -382,3 +382,6 @@ option('rust', type: 'feature', value: 'disabled',
+@@ -382,3 +382,3 @@ option('rust', type: 'feature', value: 'disabled',
         description: 'Rust support')
  option('strict_rust_lints', type: 'boolean', value: false,
         description: 'Enable stricter set of Rust warnings')
-+
-+option('install_dev_sdk', type: 'boolean', value: true,
-+       description: 'Install device development SDK (headers and configs)')
 -- 
 2.43.0
 
