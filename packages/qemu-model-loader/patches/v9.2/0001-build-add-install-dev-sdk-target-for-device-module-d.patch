@@ -1,6 +1,6 @@
-From 380bf0d77cc2732706ec266d202f6b50ed21df05 Mon Sep 17 00:00:00 2001
+From 3d102e3c7e373c39601e7d7161b6a63f1918f7cf Mon Sep 17 00:00:00 2001
 From: Matthew Ballance <matt.ballance@gmail.com>
-Date: Sun, 1 Feb 2026 22:27:55 +0000
+Date: Sun, 1 Feb 2026 22:35:49 +0000
 Subject: [PATCH] build: add device SDK installation
 
 Install device development SDK headers and pkg-config file to enable
@@ -16,11 +16,11 @@ config-poison.h is installed automatically as part of its generation.
 
 Headers are installed to ${prefix}/include/qemu-device/
 ---
- meson.build | 8 ++++++--
- 1 file changed, 6 insertions(+), 2 deletions(-)
+ meson.build | 70 +++++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 68 insertions(+), 2 deletions(-)
 
 diff --git a/meson.build b/meson.build
-index 147097c..c7a3826 100644
+index 147097c..6e53ba2 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -3360,12 +3360,16 @@ foreach target: target_dirs
@@ -42,6 +42,75 @@ index 147097c..c7a3826 100644
  
  if fdt_required.length() > 0
    error('fdt disabled but required by targets ' + ', '.join(fdt_required))
+@@ -4319,6 +4323,68 @@ if get_option('plugins')
+     # On windows, we want to deliver the qemu_plugin_api.lib file in the qemu installer,
+     # so that plugin authors can compile against it.
+     install_data(win32_qemu_plugin_api_lib, install_dir: 'lib')
++
++###########################
++# Device Module SDK       #
++###########################
++
++# Install all public API headers needed for device development
++install_subdir('include/qemu',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false,
++               exclude_files: ['osdep.h.inc'])
++
++install_subdir('include/qom',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false)
++
++install_subdir('include/hw',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false)
++
++install_subdir('include/exec',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false)
++
++install_subdir('include/sysemu',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false)
++
++install_subdir('include/chardev',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false)
++
++install_subdir('include/io',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false)
++
++install_subdir('include/migration',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false)
++
++install_subdir('include/monitor',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false)
++
++# Install generated configuration file
++install_data(meson.current_build_dir() / 'config-host.h',
++             install_dir: get_option('includedir') / 'qemu-device')
++
++# Install generated QAPI headers (subdirectory with all files)
++install_subdir(meson.current_build_dir() / 'qapi',
++               install_dir: get_option('includedir') / 'qemu-device',
++               strip_directory: false,
++               exclude_directories: ['trace'])
++
++# Generate and install pkg-config file
++pkg = import('pkgconfig')
++pkg.generate(
++  name: 'qemu-device',
++  description: 'QEMU Device Development SDK',
++  version: meson.project_version(),
++  subdirs: ['qemu-device'],
++)
++
+   endif
+ endif
+ 
 -- 
 2.43.0
 
