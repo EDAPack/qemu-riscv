@@ -1,26 +1,14 @@
-From 3d102e3c7e373c39601e7d7161b6a63f1918f7cf Mon Sep 17 00:00:00 2001
+From cc3553c2abd8769d912971a74e77e81af29c9268 Mon Sep 17 00:00:00 2001
 From: Matthew Ballance <matt.ballance@gmail.com>
-Date: Sun, 1 Feb 2026 22:35:49 +0000
+Date: Sun, 1 Feb 2026 22:45:56 +0000
 Subject: [PATCH] build: add device SDK installation
 
-Install device development SDK headers and pkg-config file to enable
-building QEMU device modules as external shared libraries.
-
-The SDK includes:
-- Public API headers from include/{qemu,qom,hw,exec,sysemu,chardev,io,migration,monitor}
-- Generated configuration files (config-host.h, config-poison.h)
-- Generated QAPI headers
-- pkg-config file for easy integration
-
-config-poison.h is installed automatically as part of its generation.
-
-Headers are installed to ${prefix}/include/qemu-device/
 ---
  meson.build | 70 +++++++++++++++++++++++++++++++++++++++++++++++++++--
  1 file changed, 68 insertions(+), 2 deletions(-)
 
 diff --git a/meson.build b/meson.build
-index 147097c..6e53ba2 100644
+index 147097c..49f5360 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -3360,12 +3360,16 @@ foreach target: target_dirs
@@ -42,10 +30,10 @@ index 147097c..6e53ba2 100644
  
  if fdt_required.length() > 0
    error('fdt disabled but required by targets ' + ', '.join(fdt_required))
-@@ -4319,6 +4323,68 @@ if get_option('plugins')
-     # On windows, we want to deliver the qemu_plugin_api.lib file in the qemu installer,
+@@ -4320,6 +4324,68 @@ if get_option('plugins')
      # so that plugin authors can compile against it.
      install_data(win32_qemu_plugin_api_lib, install_dir: 'lib')
+   endif
 +
 +###########################
 +# Device Module SDK       #
@@ -108,9 +96,9 @@ index 147097c..6e53ba2 100644
 +  subdirs: ['qemu-device'],
 +)
 +
-   endif
  endif
  
+ subdir('qga')
 -- 
 2.43.0
 
