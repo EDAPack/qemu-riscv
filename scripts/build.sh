@@ -15,6 +15,22 @@ if test $(uname -s) = "Linux"; then
             python3 python3-pip python3-venv \
             libglib2.0-dev libpixman-1-dev zlib1g-dev \
             ninja-build pkg-config patchelf
+
+        # QEMU master requires Python >= 3.12. Ubuntu 22.04 ships 3.10, so pull
+        # 3.12 from deadsnakes there and hand it to configure explicitly --
+        # leaving the system python3 alone, since apt itself depends on it.
+        if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)'; then
+            DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common
+            add-apt-repository -y ppa:deadsnakes/ppa
+            DEBIAN_FRONTEND=noninteractive apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y python3.12 python3.12-venv
+            # QEMU builds its own venv with --system-site-packages. Without a
+            # pip of its own, python3.12 falls through to the system 3.10 pip
+            # in /usr/lib/python3/dist-packages, which dies on the distutils
+            # that 3.12 removed -- and meson never gets installed.
+            /usr/bin/python3.12 -m ensurepip --upgrade
+            QEMU_PYTHON=/usr/bin/python3.12
+        fi
     elif command -v yum >/dev/null 2>&1; then
         # CentOS/RHEL
         yum update -y
@@ -92,6 +108,7 @@ cd qemu
 # Configure QEMU for RISC-V targets only
 # Disable features not available/needed for portability
 ./configure \
+    ${QEMU_PYTHON:+--python=${QEMU_PYTHON}} \
     --target-list=riscv32-softmmu,riscv64-softmmu,riscv32-linux-user,riscv64-linux-user \
     --prefix=${root}/release/qemu-riscv \
     --disable-docs \

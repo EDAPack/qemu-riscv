@@ -6,8 +6,9 @@
 # repository.
 #
 # WHY THIS IS A CHECK AND NOT A MIRROR OF THE BUILD. The real build runs
-# `docker run` against stock manylinux images (and, in some repos, macOS and
-# Windows runners) to compile an EDA tool from source. None of that is
+# `docker run` against stock distro images -- ubuntu:22.04 and ubuntu:24.04
+# here, since manylinux's glib is too old for QEMU (2d10f6f) -- and, in some
+# repos, macOS and Windows runners, to compile an EDA tool from source. None of that is
 # reproducible in catthehacker/ubuntu:act-22.04 -- there is no Docker daemon on
 # this runner -- and a shadow that pretended otherwise would go red for reasons
 # about the runner rather than about the code.
